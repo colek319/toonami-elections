@@ -1,0 +1,21 @@
+"""Season constants for the Toonami elections."""
+
+import re
+from pathlib import Path
+
+CSV_PATH = Path(__file__).parent / "toonami-jul-2026.csv"
+
+DIMENSIONS = ["Goon", "Cute", "Laugh", "Edgy", "Rad", "Aesthetic"]
+
+# Shows up for nomination this season (names as they appear in the CSV).
+NOMINATIONS = [
+    "Jaadugar: A Witch In Mongolia",
+    "The 100 Girlfriends Who Really Really Really Really REALLY Love You season 3",
+    "You and I Are Polar Opposites season 2",
+    "Sparks of Tomorrow",
+    "Smoking Behind the Supermarket With You",
+    "Chainsmoker Cat",
+    "Let's Go Kaikigumi",
+]
+
+COLUMN_RE = re.compile(r"^(?P<show>.+) \[(?P<dim>" + "|".join(DIMENSIONS) + r")\]$")

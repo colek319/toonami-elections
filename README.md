@@ -16,6 +16,21 @@ python elect.py
 
 Prints the full ranking and the 3 winners for each configured election.
 
+## Testing
+
+```sh
+pytest
+```
+
+`test_elect.py` covers the loader quirks (junk columns, whitespace
+normalization, missing votes, dropping unrated shows), both imputers (fills
+everything, keeps observed votes, never mutates the input), both strategies
+(hand-computed Euclidean distances; Mahalanobis penalizing a miss on a
+low-variance dimension where Euclidean can't tell the difference), and an
+end-to-end election plus a smoke test on the real season CSV. Add a test
+alongside any new imputer or strategy — the parametrized contract tests are
+the pattern to copy.
+
 In a new shell later, just `source venv/bin/activate` again — the venv and
 installed packages persist.
 
@@ -27,14 +42,6 @@ installed packages persist.
   unwatched/skipped shows; they get imputed in memory, never written back.
 - `research.md` — notes on alternative imputation and election methods.
 
-## Each new season
-
-1. Drop the new form export next to `elect.py` and point `CSV_PATH` at it.
-2. Update `NOMINATIONS` with the shows up for vote, spelled **exactly** as
-   they appear in the CSV column headers (minus the ` [Dimension]` suffix;
-   whitespace is normalized for you). Everything not in `NOMINATIONS` counts
-   as a past show and shapes the taste centroid.
-
 ## Anatomy of an election
 
 ```python
@@ -44,7 +51,7 @@ Election(imputer, loader, targets, strategy, n=3)
 | Arg | What it is | Existing options |
 |---|---|---|
 | `imputer` | fills missing votes | `impute_column_mean`, `impute_voter_bias` |
-| `loader` | reads the CSV | `load` |
+| `loader` | reads the CSV | `Load("toonami-jul-2026.csv")` — construct with a path (bare filenames resolve next to the code); calling it returns the processed ratings |
 | `targets` | shows up for vote | `NOMINATIONS` |
 | `strategy` | scores the targets | `euclidean`, `mahalanobis` |
 
@@ -53,7 +60,7 @@ Election(imputer, loader, targets, strategy, n=3)
 ## Adding a new method
 
 **New imputation** — add a function under *Imputation strategies* with this
-contract: takes the raw voter × (show, dim) DataFrame from `load()` (NaN =
+contract: takes the raw voter × (show, dim) DataFrame from the loader (NaN =
 missing vote), returns a copy with every NaN filled. Never mutate the input
 or touch the CSV.
 
