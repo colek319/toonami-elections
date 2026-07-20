@@ -3,12 +3,14 @@
 import re
 from pathlib import Path
 
-CSV_PATH = Path(__file__).parent / "toonami-jul-2026.csv"
+CSV_PATH = Path(__file__).parent / "data/toonami-jul-2026.csv"
 
 DIMENSIONS = ["Goon", "Cute", "Laugh", "Edgy", "Rad", "Aesthetic"]
 
-# Shows up for nomination this season (names as they appear in the CSV).
-NOMINATIONS = [
+# Each season's nominations are frozen under a season-specific name so the
+# README's past-elections table stays reproducible (names as they appear in
+# that season's CSV).
+SUMMER_2026_NOMINATIONS = [
     "Jaadugar: A Witch In Mongolia",
     "The 100 Girlfriends Who Really Really Really Really REALLY Love You season 3",
     "You and I Are Polar Opposites season 2",

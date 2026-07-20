@@ -2,7 +2,7 @@
 
 Each is constructed with a file path and returns the processed ratings
 when called with no arguments, so an Election can be handed
-``Load("toonami-jul-2026.csv")`` and call it when it runs.
+``Load("data/toonami-jul-2026.csv")`` and call it when it runs.
 """
 
 from pathlib import Path
@@ -22,7 +22,7 @@ class Load:
     """
 
     def __init__(self, path=CSV_PATH):
-        # A bare filename resolves next to the code, not the cwd, so
+        # A relative path resolves next to the code, not the cwd, so
         # `python elect.py` works from anywhere.
         self.path = Path(path)
         if not self.path.is_absolute():

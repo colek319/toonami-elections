@@ -20,6 +20,26 @@ def impute_column_mean(df):
     return out.fillna(3.0)                                  # last resort
 
 
+def impute_knn(df, k=3):
+    """Fill from the k voters whose ballots correlate most with this one.
+
+    A missing cell becomes the mean of what the voter's k nearest
+    neighbours — by Pearson correlation over the columns both ballots
+    rated — gave that (show, dimension). Anti-correlated voters are
+    never neighbours. Cells no neighbour rated fall back to the column
+    mean, then the scale midpoint.
+    """
+    corr = df.T.corr(min_periods=2)
+    out = df.copy()
+    for voter in df.index:
+        missing = df.columns[df.loc[voter].isna()]
+        sims = corr.loc[voter].drop(voter).dropna()
+        neighbours = sims[sims > 0].nlargest(k).index
+        if len(missing) and len(neighbours):
+            out.loc[voter, missing] = df.loc[neighbours, missing].mean()
+    return out.fillna(df.mean()).fillna(3.0)
+
+
 def impute_voter_bias(df):
     """Column mean, shifted by how harsh or generous the voter rates overall.
 

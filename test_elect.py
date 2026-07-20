@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from constants import DIMENSIONS, NOMINATIONS
+from constants import DIMENSIONS, SUMMER_2026_NOMINATIONS
 from elect import Election, profiles
-from election_strategies import euclidean, mahalanobis
-from imputation import impute_column_mean, impute_voter_bias
+from election_strategies import euclidean, mahalanobis, portfolio
+from imputation import impute_column_mean, impute_knn, impute_voter_bias
 from loaders import Load
 
 
@@ -69,7 +69,7 @@ def test_load_drops_junk_columns(ratings):
 # Imputation
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("imputer", [impute_column_mean, impute_voter_bias])
+@pytest.mark.parametrize("imputer", [impute_column_mean, impute_knn, impute_voter_bias])
 def test_imputers_fill_everything_and_keep_observed(imputer, ratings):
     out = imputer(ratings)
     assert not out.isna().any().any()
@@ -77,7 +77,7 @@ def test_imputers_fill_everything_and_keep_observed(imputer, ratings):
     assert out[observed].equals(ratings[observed])
 
 
-@pytest.mark.parametrize("imputer", [impute_column_mean, impute_voter_bias])
+@pytest.mark.parametrize("imputer", [impute_column_mean, impute_knn, impute_voter_bias])
 def test_imputers_do_not_mutate_input(imputer, ratings):
     before = ratings.copy()
     imputer(ratings)
@@ -88,6 +88,26 @@ def test_column_mean_fills_with_crowd_mean(ratings):
     out = impute_column_mean(ratings)
     # Only Ann rated Alpha's Aesthetic (a 1), so Bob's gap becomes 1.0.
     assert out.loc["Bob", ("Alpha", "Aesthetic")] == 1.0
+
+
+def test_knn_fills_from_correlated_neighbour(ratings):
+    # Gap's ballot tracks Twin's exactly and mirrors Foil's. The missing
+    # cell should come from Twin (a 5), not the anti-correlated Foil and
+    # not the crowd mean (which Foil's 1 would drag to 3).
+    cols = pd.MultiIndex.from_product(
+        [["S1", "S2"], DIMENSIONS], names=["show", "dim"]
+    )
+    df = pd.DataFrame.from_dict(
+        {
+            "Gap": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 4, np.nan],
+            "Twin": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 4, 5],
+            "Foil": [5, 4, 3, 2, 1, 5, 4, 3, 2, 1, 2, 1],
+        },
+        orient="index",
+        dtype=float,
+    ).set_axis(cols, axis=1)
+    out = impute_knn(df)
+    assert out.loc["Gap", ("S2", "Aesthetic")] == 5.0
 
 
 def test_voter_bias_shifts_fill_by_rater_generosity(ratings):
@@ -137,6 +157,26 @@ def test_mahalanobis_penalizes_low_variance_dimensions():
     assert e["MissOnGoon"] == pytest.approx(e["MissOnCute"])
 
 
+def test_portfolio_elects_a_complementary_slate():
+    # Centroid: all 3s. Hot and Cold each miss it by 2 on Goon but in
+    # opposite directions, so {Hot, Cold, Mid} averages exactly onto the
+    # centroid. Euclidean would take the Mehs over Hot and Cold.
+    past = make_profiles({"P1": [2] * 6, "P2": [4] * 6})
+    noms = make_profiles({
+        "Hot": [5, 3, 3, 3, 3, 3],
+        "Cold": [1, 3, 3, 3, 3, 3],
+        "Mid": [3, 3, 3, 3, 3, 3],
+        "Meh1": [3.6, 3, 3, 3, 3, 3],
+        "Meh2": [3.6, 3, 3, 3, 3, 3],
+    })
+    d = portfolio(past, noms)
+    for show in ["Hot", "Cold", "Mid"]:
+        assert d[show] == pytest.approx(0.0)
+    assert d["Meh1"] > 0 and d["Meh2"] > 0
+    e = euclidean(past, noms)
+    assert e["Meh1"] < e["Hot"]  # the individual view disagrees
+
+
 # ---------------------------------------------------------------------------
 # Election
 # ---------------------------------------------------------------------------
@@ -146,6 +186,16 @@ def test_election_end_to_end(mini_csv):
     winners = election.run()
     assert list(winners.index) == ["Beta Two"]
     assert winners["Beta Two"] >= 0
+
+
+def test_election_rejects_unknown_nomination(mini_csv):
+    # A typo'd or renamed show fails fast with the bad names, not a
+    # cryptic pandas KeyError deep in the strategy.
+    election = Election(
+        impute_column_mean, Load(mini_csv), ["Beta Two", "Nonexistent"], euclidean
+    )
+    with pytest.raises(ValueError, match="Nonexistent"):
+        election.ranking()
 
 
 def test_election_ranking_is_sorted_ascending(mini_csv):
@@ -162,8 +212,8 @@ def test_profiles_are_show_by_dimension(ratings):
 
 def test_real_csv_smoke():
     """The season's actual election runs and elects 3 of the nominations."""
-    election = Election(impute_column_mean, Load(), NOMINATIONS, euclidean)
+    election = Election(impute_column_mean, Load(), SUMMER_2026_NOMINATIONS, euclidean)
     winners = election.run()
     assert len(winners) == 3
-    assert set(winners.index) <= set(NOMINATIONS)
+    assert set(winners.index) <= set(SUMMER_2026_NOMINATIONS)
     assert election.ranking().is_monotonic_increasing
